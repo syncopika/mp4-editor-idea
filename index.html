@@ -1,0 +1,261 @@
+<!doctype html>
+
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title> mp4 editor idea</title>
+  <script src="mp4box.all.js"></script> <!-- from https://gpac.github.io/mp4box.js/dist/mp4box.all.js -->
+  
+  <style>
+    body {
+      font-family: Arial;
+    }
+    
+    canvas {
+      border: 1px solid #000;
+      width: 200px;
+      height: 200px;
+    }
+    
+    #frames {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+      overflow: scroll;
+      margin: 2px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>mp4 editor idea</h1>
+  <p> not an actual editor yet but it can extract frames from an mp4 file :D and more to come hopefully </p>
+  <!--<button id='importFile'>import file</button>-->
+  <input type="file" accept="video/mp4" onchange="start(this.files[0])">
+  
+  <br />
+  
+  <div id='frames'></div>
+  
+  <p> there is some interesting behavior in which, after the first load, any subsequent loads seem to show the last 2 frames of the previously loaded mp4. :/ need to look into it.
+
+<script>
+//https://gpac.github.io/mp4box.js/#demos
+//https://gpac.github.io/mp4box.js/#extraction
+//https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API
+//https://stackoverflow.com/questions/32699721/javascript-extract-video-frames-reliably
+
+//console.log(MP4Box);
+//console.log(VideoDecoder); // https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder
+//console.log(EncodedVideoChunk); //https://developer.mozilla.org/en-US/docs/Web/API/EncodedVideoChunk
+
+let images = [];
+let frameCount = 0;
+let startDate;
+let offset = 0;
+let fileSize = 0;
+let currFile = null;
+const chunkSize  = 1024 * 1024; // bytes
+
+const videoDecoderConfig = {
+  codec: '',
+  codedHeight: 0,
+  codedWidth: 0,
+  description: null,
+  file: null,
+  info: null,
+};
+
+let mp4Box = null;
+
+const onparsedbuffer = (mp4box, buffer) => {
+  console.log(`Appending buffer with offset: ${offset}`);
+  buffer.fileStart = offset;
+  mp4box.appendBuffer(buffer);
+}
+
+const readBlock = (_offset, length, _file) => {
+  const reader = new FileReader();
+  const blob = _file.slice(_offset, length + _offset);
+  reader.onload = onBlockRead;
+  reader.readAsArrayBuffer(blob);
+}
+
+const onBlockRead = (evt) => {
+  if(evt.target.error == null){
+    onparsedbuffer(mp4Box, evt.target.result); // callback for handling read chunk
+    offset += evt.target.result.byteLength;
+    //progressbar.progressbar({ value: Math.ceil(100*offset/fileSize) });
+  }else{
+    console.log(`Read error: ${evt.target.error}`);
+    //finalizeUI(fileobj, loadbutton, false);
+    return;
+  }
+  
+  if(offset >= fileSize){
+    //progressbar.progressbar({ value: 100 });
+    console.log(`Done reading file (${fileSize} bytes) in ${new Date() - startDate} ms`);
+    mp4Box.flush();
+    //finalizeUI(fileobj, loadbutton, true);
+    return;
+  }
+
+  readBlock(offset, chunkSize, currFile);
+}
+
+function clearFrameCanvases(){
+  const parent = document.getElementById('frames');
+  while(parent.lastChild){
+    parent.removeChild(parent.lastChild);
+  }
+}
+
+// https://github.com/josephrocca/getVideoFrames.js/blob/main/mod.js
+const decoder = new VideoDecoder({
+  output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
+    // TODO: use videoDecoderConfig.codedHeight and codedWidth
+    const canvas = document.createElement('canvas');
+    canvas.id = `frame${frameCount}`;
+    canvas.width = 200;
+    canvas.height = 200;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+    
+    frame.close();
+    
+    //images.push(canvas);
+    
+    document.getElementById('frames').appendChild(canvas);
+    
+    frameCount++;
+  },
+  error: (e) => {
+    console.error(e);
+    //setStatus("decode", e);
+  },
+});
+
+function getDescription(track, mp4box){
+  const tr = mp4box.getTrackById(track.id);
+  for(const entry of tr.mdia.minf.stbl.stsd.entries){
+    if(entry.avcC || entry.hvcC){
+      const stream = new DataStream(undefined, 0, DataStream.BIG_ENDIAN);
+      if(entry.avcC){
+        entry.avcC.write(stream);
+      }else{
+        entry.hvcC.write(stream);
+      }
+      return new Uint8Array(stream.buffer, 8);  // Remove the box header.
+    }
+  }
+  throw "avcC or hvcC not found";
+}
+
+function createMp4Box(){
+  const mp4Box = MP4Box.createFile(false);
+
+  mp4Box.onError = (e) => {
+    console.log("Failed to parse ISOBMFF data");
+  };
+
+  mp4Box.onSidx = (sidx) => {
+    console.log(sidx);
+  };
+
+  mp4Box.onReady = function(info){
+    console.log(info);
+    
+    // do stuff with mp4 data
+    const track = info.videoTracks[0];
+    
+    videoDecoderConfig.codec = track.codec;
+    videoDecoderConfig.codedHeight = track.video.height;
+    videoDecoderConfig.codedWidth = track.video.width;
+    videoDecoderConfig.info = info;
+    videoDecoderConfig.description = getDescription(track, this);
+    
+    decoder.configure(videoDecoderConfig);
+    
+    this.setExtractionOptions(track.id);
+    this.start();
+  }
+
+  mp4Box.onSamples = (track_id, ref, samples) => {
+    console.log(`got samples - num samples: ${samples.length}`);
+    
+    for(const sample of samples){
+      // fyi, this is async
+      decoder.decode(new EncodedVideoChunk({
+        type: sample.is_sync ? "key": "delta",
+        timestamp: 1e6 * sample.cts / sample.timescale,
+        duration: 1e6 * sample.duration / sample.timescale,
+        data: sample.data
+      }));
+    }
+    
+    //console.log(images);
+  }
+  
+  return mp4Box;
+}
+
+// https://gpac.github.io/mp4box.js/test/ui-helper.js
+function parseFile(fileobj){
+  fileSize = fileobj.size;
+  startDate = new Date();
+  offset = 0;
+  frameCount = 0;
+  
+  clearFrameCanvases();
+  images = [];
+  
+  mp4Box = createMp4Box();
+  
+  readBlock(offset, chunkSize, fileobj);
+}
+
+function start(fileobj){
+  currFile = fileobj;
+  parseFile(fileobj);
+}
+
+
+function importFile(elementId){
+  // set up event listener on button
+  document.getElementById(elementId).addEventListener('click', () => {
+    function fileHandler(){
+      //initiate file choosing after button click
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.addEventListener('change', getFile, false);
+      input.click();
+    }
+            
+    function getFile(e){
+      const reader = new FileReader();
+      const file = e.target.files[0];
+      
+      // only mp4 files allowed
+      if(!file.type.match(/mp4.*/)){
+        console.log("not a valid file");
+        return;
+      }
+      
+      console.log(`file size: ${file.size} bytes`);
+      
+      parseFile(file, mp4Box);
+    }
+      
+    fileHandler();
+  });
+}
+//importFile('importFile');
+
+
+</script>
+
+</body>
+
+</html>

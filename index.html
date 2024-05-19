@@ -37,8 +37,6 @@
   <br />
   
   <div id='frames'></div>
-  
-  <p> there is some interesting behavior in which, after the first load, any subsequent loads seem to show the last 2 frames of the previously loaded mp4. :/ need to look into it.
 
 <script>
 //https://gpac.github.io/mp4box.js/#demos
@@ -58,16 +56,8 @@ let fileSize = 0;
 let currFile = null;
 const chunkSize  = 1024 * 1024; // bytes
 
-const videoDecoderConfig = {
-  codec: '',
-  codedHeight: 0,
-  codedWidth: 0,
-  description: null,
-  file: null,
-  info: null,
-};
-
 let mp4Box = null;
+let videoDecoder = null;
 
 const onparsedbuffer = (mp4box, buffer) => {
   console.log(`Appending buffer with offset: ${offset}`);
@@ -106,36 +96,13 @@ const onBlockRead = (evt) => {
 
 function clearFrameCanvases(){
   const parent = document.getElementById('frames');
+  //let countRemoved = 0;
   while(parent.lastChild){
     parent.removeChild(parent.lastChild);
+    //countRemoved++;
   }
+  //console.log(countRemoved);
 }
-
-// https://github.com/josephrocca/getVideoFrames.js/blob/main/mod.js
-const decoder = new VideoDecoder({
-  output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
-    // TODO: use videoDecoderConfig.codedHeight and codedWidth
-    const canvas = document.createElement('canvas');
-    canvas.id = `frame${frameCount}`;
-    canvas.width = 200;
-    canvas.height = 200;
-    
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-    
-    frame.close();
-    
-    //images.push(canvas);
-    
-    document.getElementById('frames').appendChild(canvas);
-    
-    frameCount++;
-  },
-  error: (e) => {
-    console.error(e);
-    //setStatus("decode", e);
-  },
-});
 
 function getDescription(track, mp4box){
   const tr = mp4box.getTrackById(track.id);
@@ -170,6 +137,44 @@ function createMp4Box(){
     // do stuff with mp4 data
     const track = info.videoTracks[0];
     
+    // https://github.com/josephrocca/getVideoFrames.js/blob/main/mod.js
+    decoder = new VideoDecoder({
+      output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
+      
+        console.log(`writing frame: ${frameCount}`);
+      
+        // TODO: use videoDecoderConfig.codedHeight and codedWidth
+        const canvas = document.createElement('canvas');
+        canvas.id = `frame${frameCount}`;
+        canvas.width = 200;
+        canvas.height = 200;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+        
+        frame.close();
+        
+        //images.push(canvas);
+        
+        document.getElementById('frames').appendChild(canvas);
+        
+        frameCount++;
+        //console.log(frameCount);
+      },
+      error: (e) => {
+        console.error(e);
+        //setStatus("decode", e);
+      },
+    });
+    
+    const videoDecoderConfig = {
+      codec: '',
+      codedHeight: 0,
+      codedWidth: 0,
+      description: null,
+      info: null,
+    };
+    
     videoDecoderConfig.codec = track.codec;
     videoDecoderConfig.codedHeight = track.video.height;
     videoDecoderConfig.codedWidth = track.video.width;
@@ -186,15 +191,14 @@ function createMp4Box(){
     console.log(`got samples - num samples: ${samples.length}`);
     
     for(const sample of samples){
-      // fyi, this is async
+      // this is async
       decoder.decode(new EncodedVideoChunk({
-        type: sample.is_sync ? "key": "delta",
+        type: sample.is_sync ? "key" : "delta",
         timestamp: 1e6 * sample.cts / sample.timescale,
         duration: 1e6 * sample.duration / sample.timescale,
         data: sample.data
       }));
     }
-    
     //console.log(images);
   }
   

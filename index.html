@@ -14,8 +14,6 @@
     
     canvas {
       border: 1px solid #000;
-      width: 200px;
-      height: 200px;
     }
     
     #frames {
@@ -37,6 +35,10 @@
   <br />
   
   <div id='frames'></div>
+  
+  <br />
+  
+  <button id='saveChanges'> save changes </button>
 
 <script>
 //https://gpac.github.io/mp4box.js/#demos
@@ -44,15 +46,13 @@
 //https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API
 //https://stackoverflow.com/questions/32699721/javascript-extract-video-frames-reliably
 
-//console.log(MP4Box);
-//console.log(VideoDecoder); // https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder
-//console.log(EncodedVideoChunk); //https://developer.mozilla.org/en-US/docs/Web/API/EncodedVideoChunk
-
 let images = [];
+let frameInfo = {};
 let frameCount = 0;
 let startDate;
 let offset = 0;
 let fileSize = 0;
+let currMp4Info = null;
 let currFile = null;
 const chunkSize  = 1024 * 1024; // bytes
 
@@ -96,12 +96,9 @@ const onBlockRead = (evt) => {
 
 function clearFrameCanvases(){
   const parent = document.getElementById('frames');
-  //let countRemoved = 0;
   while(parent.lastChild){
     parent.removeChild(parent.lastChild);
-    //countRemoved++;
   }
-  //console.log(countRemoved);
 }
 
 function getDescription(track, mp4box){
@@ -114,10 +111,23 @@ function getDescription(track, mp4box){
       }else{
         entry.hvcC.write(stream);
       }
-      return new Uint8Array(stream.buffer, 8);  // Remove the box header.
+      return new Uint8Array(stream.buffer, 8);
     }
   }
   throw "avcC or hvcC not found";
+}
+
+function invertImage(imgData){
+  const d = imgData.data;
+  let r, g, b, x, y, z;
+  for(let i = 0; i < d.length; i += 4){
+    r = d[i];
+    g = d[i + 1];
+    b = d[i + 2];
+    d[i] = 255 - r;
+    d[i + 1] = 255 - g;
+    d[i + 2] = 255 - b;
+  }
 }
 
 function createMp4Box(){
@@ -133,39 +143,10 @@ function createMp4Box(){
 
   mp4Box.onReady = function(info){
     console.log(info);
+    currMp4Info = info;
     
     // do stuff with mp4 data
     const track = info.videoTracks[0];
-    
-    // https://github.com/josephrocca/getVideoFrames.js/blob/main/mod.js
-    decoder = new VideoDecoder({
-      output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
-      
-        console.log(`writing frame: ${frameCount}`);
-      
-        // TODO: use videoDecoderConfig.codedHeight and codedWidth
-        const canvas = document.createElement('canvas');
-        canvas.id = `frame${frameCount}`;
-        canvas.width = 200;
-        canvas.height = 200;
-        
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-        
-        frame.close();
-        
-        //images.push(canvas);
-        
-        document.getElementById('frames').appendChild(canvas);
-        
-        frameCount++;
-        //console.log(frameCount);
-      },
-      error: (e) => {
-        console.error(e);
-        //setStatus("decode", e);
-      },
-    });
     
     const videoDecoderConfig = {
       codec: '',
@@ -181,6 +162,49 @@ function createMp4Box(){
     videoDecoderConfig.info = info;
     videoDecoderConfig.description = getDescription(track, this);
     
+    // https://github.com/josephrocca/getVideoFrames.js/blob/main/mod.js
+    decoder = new VideoDecoder({
+      output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
+        //console.log(`writing frame: ${frameCount}`);
+        
+        /*
+        frameInfo[frameCount] = {
+          timestamp: frame.timestamp,
+          duration: frame.duration,
+        };*/
+        
+        console.log(`adding canvas: ${frameCount}`);
+        
+        const canvas = document.createElement('canvas');
+        canvas.id = `frame_${frameCount}`;
+        canvas.width = track.video.width;
+        canvas.height = track.video.height;
+        
+        // TODO: do something more interesting here
+        canvas.addEventListener('click', (evt) => {
+          const canvasCtx = canvas.getContext('2d');
+          const imgData = canvasCtx.getImageData(0, 0, canvas.width, canvas.height);
+          invertImage(imgData);
+          canvasCtx.putImageData(imgData, 0, 0);
+        });
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+        
+        frame.close();
+        
+        //images.push(canvas);
+        
+        document.getElementById('frames').appendChild(canvas);
+        
+        frameCount++;
+      },
+      error: (e) => {
+        console.error(e);
+        //setStatus("decode", e);
+      },
+    });
+    
     decoder.configure(videoDecoderConfig);
     
     this.setExtractionOptions(track.id);
@@ -190,8 +214,19 @@ function createMp4Box(){
   mp4Box.onSamples = (track_id, ref, samples) => {
     console.log(`got samples - num samples: ${samples.length}`);
     
+    let sampleCount = 0;
     for(const sample of samples){
       // this is async
+      frameInfo[sampleCount] = {
+        timestamp: 1e6 * sample.cts / sample.timescale,
+        duration: sample.duration,
+        cts: sample.cts,
+        dts: sample.dts,
+        sample_num: sampleCount,
+      };
+      
+      console.log(`processing sample ${sampleCount++}`);
+      
       decoder.decode(new EncodedVideoChunk({
         type: sample.is_sync ? "key" : "delta",
         timestamp: 1e6 * sample.cts / sample.timescale,
@@ -199,7 +234,6 @@ function createMp4Box(){
         data: sample.data
       }));
     }
-    //console.log(images);
   }
   
   return mp4Box;
@@ -214,6 +248,7 @@ function parseFile(fileobj){
   
   clearFrameCanvases();
   images = [];
+  frameInfo = {};
   
   mp4Box = createMp4Box();
   
@@ -225,38 +260,91 @@ function start(fileobj){
   parseFile(fileobj);
 }
 
-
-function importFile(elementId){
-  // set up event listener on button
-  document.getElementById(elementId).addEventListener('click', () => {
-    function fileHandler(){
-      //initiate file choosing after button click
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.addEventListener('change', getFile, false);
-      input.click();
-    }
-            
-    function getFile(e){
-      const reader = new FileReader();
-      const file = e.target.files[0];
-      
-      // only mp4 files allowed
-      if(!file.type.match(/mp4.*/)){
-        console.log("not a valid file");
-        return;
-      }
-      
-      console.log(`file size: ${file.size} bytes`);
-      
-      parseFile(file, mp4Box);
-    }
-      
-    fileHandler();
-  });
+// helpful? https://github.com/gpac/mp4box.js/issues/243
+// also https://github.com/gpac/mp4box.js/issues/243#issuecomment-1884708434
+// https://stackoverflow.com/questions/73386981/get-a-frame-count-of-a-mp4-file
+async function saveChanges(){
+  console.log(frameInfo);
+  const canvasFrames = document.querySelectorAll('canvas');
+  if(canvasFrames.length > 0 && currMp4Info.videoTracks.length === 1){
+    // TODO: fyi we're only asuming one video track here.
+    
+    const codec = currMp4Info.videoTracks[0].codec; //'avc1.640016';
+    const frameWidth = canvasFrames[0].width;
+    const frameHeight = canvasFrames[0].height;
+    const totalFrames = canvasFrames.length; //currMp4Info.videoTracks[0].nb_samples; // it doesn't appear that there's necessarily a 1:1 relationship between samples and frames
+    const fps = 120; // TODO: how do I get the right fps?
+    
+    // NOTE: we are assuming right now that the number of frames hasn't changed
+    // and so the duration should be the same as the original mp4
+    
+    const trackOptions = {
+      timescale: currMp4Info.videoTracks[0].timescale,
+      width: frameWidth,
+      height: frameHeight,
+      nb_samples: totalFrames,
+      codec: codec,
+    };
+    
+    const file = MP4Box.createFile();
+    
+    let trackId = null;
+    let chunkCount = 0;
+    const videoEncoder = new VideoEncoder({
+      output: (chunk, config) => {
+        const buffer = new ArrayBuffer(chunk.byteLength);
+        chunk.copyTo(buffer);
+        
+        if(trackId == null){
+          trackOptions.avcDecoderConfigRecord = config.decoderConfig.description;
+          trackId = file.addTrack(trackOptions);
+        }
+        
+        //console.log(`chunk timestamp: ${chunk.timestamp}`);        
+        const sampleData = frameInfo[chunkCount];
+        //console.log(chunkCount);
+        console.log(sampleData);
+        
+        const sampleOptions = {duration: chunk.duration}; //chunk.duration / 1000};
+        sampleOptions.dts = sampleData.dts, //chunk.timestamp / 1000; // 1000 for 1 ms
+        sampleOptions.cts = sampleData.cts, //chunk.timestamp / 1000;
+        sampleOptions.is_sync = chunk.type === 'key';
+        
+        chunkCount++;
+        
+        file.addSample(trackId, buffer, sampleOptions);
+      },
+      error: err => console.error('VideoEncoder error: ', err)
+    });
+    
+    await videoEncoder.configure({
+      codec: codec,
+      width: frameWidth,
+      height: frameHeight,
+      bitrate: currMp4Info.videoTracks[0].bitrate,
+      framerate: fps,
+    });
+    
+    // add the frames to the video encoder
+    for(let index = 0; index < totalFrames; index++){
+      const bitmap = await createImageBitmap(canvasFrames[index]);
+      const videoFrame = new VideoFrame(bitmap, {
+        timestamp: frameInfo[index].timestamp,
+      });
+      videoEncoder.encode(videoFrame);
+      videoFrame.close();
+      bitmap.close();
+    };
+    
+    await videoEncoder.flush();
+    
+    // TODO: add audio if present as well
+    
+    file.save('editedVideo.mp4'); // TODO: allow user to name edited file
+  }
 }
-//importFile('importFile');
 
+document.getElementById('saveChanges').addEventListener('click', () => saveChanges());
 
 </script>
 

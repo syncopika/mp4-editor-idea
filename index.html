@@ -16,6 +16,10 @@
       border: 1px solid #000;
     }
     
+    canvas:hover {
+      opacity: 0.5;
+    }
+    
     #frames {
       display: flex;
       flex-direction: row;
@@ -57,10 +61,10 @@ let currFile = null;
 const chunkSize  = 1024 * 1024; // bytes
 
 let mp4Box = null;
-let videoDecoder = null;
+let decoder = null;
 
 const onparsedbuffer = (mp4box, buffer) => {
-  console.log(`Appending buffer with offset: ${offset}`);
+  //console.log(`Appending buffer with offset: ${offset}`);
   buffer.fileStart = offset;
   mp4box.appendBuffer(buffer);
 }
@@ -167,13 +171,7 @@ function createMp4Box(){
       output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
         //console.log(`writing frame: ${frameCount}`);
         
-        /*
-        frameInfo[frameCount] = {
-          timestamp: frame.timestamp,
-          duration: frame.duration,
-        };*/
-        
-        console.log(`adding canvas: ${frameCount}`);
+        //console.log(`adding canvas: ${frameCount}`);
         
         const canvas = document.createElement('canvas');
         canvas.id = `frame_${frameCount}`;
@@ -211,13 +209,13 @@ function createMp4Box(){
     this.start();
   }
 
-  mp4Box.onSamples = (track_id, ref, samples) => {
+  mp4Box.onSamples = async (track_id, ref, samples) => {
     console.log(`got samples - num samples: ${samples.length}`);
     
     let sampleCount = 0;
     for(const sample of samples){
       // this is async
-      frameInfo[sampleCount] = {
+      frameInfo[sampleCount++] = {
         timestamp: 1e6 * sample.cts / sample.timescale,
         duration: sample.duration,
         cts: sample.cts,
@@ -225,7 +223,7 @@ function createMp4Box(){
         sample_num: sampleCount,
       };
       
-      console.log(`processing sample ${sampleCount++}`);
+      //console.log(`processing sample ${sampleCount++}`);
       
       decoder.decode(new EncodedVideoChunk({
         type: sample.is_sync ? "key" : "delta",
@@ -234,6 +232,10 @@ function createMp4Box(){
         data: sample.data
       }));
     }
+    
+    // flush the decoder since we're done reading the samples. this is important to get all the frames.
+    // see https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
+    await decoder.flush();
   }
   
   return mp4Box;
@@ -260,19 +262,26 @@ function start(fileobj){
   parseFile(fileobj);
 }
 
+// https://gpac.github.io/mp4box.js/
 // helpful? https://github.com/gpac/mp4box.js/issues/243
 // also https://github.com/gpac/mp4box.js/issues/243#issuecomment-1884708434
 // https://stackoverflow.com/questions/73386981/get-a-frame-count-of-a-mp4-file
+// https://www.agama.tv/demystifying-the-mp4-container-format/
+// https://stackoverflow.com/questions/18436551/mp4-atom-parsing-where-to-configure-time/18552833#18552833
+// https://dev.to/alfg/a-quick-dive-into-mp4-57fo
+// https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
+// https://github.com/gpac/mp4box.js/blob/master/src/isofile-advanced-creation.js
 async function saveChanges(){
   console.log(frameInfo);
   const canvasFrames = document.querySelectorAll('canvas');
   if(canvasFrames.length > 0 && currMp4Info.videoTracks.length === 1){
     // TODO: fyi we're only asuming one video track here.
+    const codec = currMp4Info.videoTracks[0].codec;
+    //console.log(codec);
     
-    const codec = currMp4Info.videoTracks[0].codec; //'avc1.640016';
     const frameWidth = canvasFrames[0].width;
     const frameHeight = canvasFrames[0].height;
-    const totalFrames = canvasFrames.length; //currMp4Info.videoTracks[0].nb_samples; // it doesn't appear that there's necessarily a 1:1 relationship between samples and frames
+    const totalFrames = canvasFrames.length;
     const fps = 120; // TODO: how do I get the right fps?
     
     // NOTE: we are assuming right now that the number of frames hasn't changed
@@ -284,9 +293,18 @@ async function saveChanges(){
       height: frameHeight,
       nb_samples: totalFrames,
       codec: codec,
+      duration: currMp4Info.videoTracks[0].duration,
     };
     
     const file = MP4Box.createFile();
+    
+    // copy over some info from the loaded mp4 we're editing
+    // https://github.com/gpac/mp4box.js/blob/master/src/isofile-advanced-creation.js#L4
+    file.init({
+      brands: currMp4Info.brands,
+      timescale: currMp4Info.timescale,
+      duration: currMp4Info.duration, // TODO: this might change if we removed or added frames?
+    });
     
     let trackId = null;
     let chunkCount = 0;
@@ -302,16 +320,18 @@ async function saveChanges(){
         
         //console.log(`chunk timestamp: ${chunk.timestamp}`);        
         const sampleData = frameInfo[chunkCount];
-        //console.log(chunkCount);
-        console.log(sampleData);
+        //console.log(sampleData);
         
-        const sampleOptions = {duration: chunk.duration}; //chunk.duration / 1000};
-        sampleOptions.dts = sampleData.dts, //chunk.timestamp / 1000; // 1000 for 1 ms
-        sampleOptions.cts = sampleData.cts, //chunk.timestamp / 1000;
-        sampleOptions.is_sync = chunk.type === 'key';
+        const sampleOptions = {
+          duration: sampleData.duration,
+          dts: sampleData.dts,
+          cts: sampleData.cts,
+          is_sync: chunk.type === 'key',
+        };
         
         chunkCount++;
         
+        // add new frame as sample to the mp4 file
         file.addSample(trackId, buffer, sampleOptions);
       },
       error: err => console.error('VideoEncoder error: ', err)

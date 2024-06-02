@@ -40,7 +40,8 @@
 
 <body>
   <h1> mp4 editor idea </h1>
-  <p> currently only extracts frames from an mp4 file and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
+  <p> currently only extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
+  <p> NOTE: this has not been tested yet on medium/large mp4 files (e.g. anything longer than a few seconds). </p>
   <p id='instructions'> instructions: click on a frame after loading an mp4 file to edit it. click on 'save changes' to export a new mp4 file with your edits. </p>
   
   <input type="file" accept="video/mp4" onchange="start(this.files[0])">
@@ -340,13 +341,12 @@
     const canvasFrames = document.querySelectorAll('canvas');
     if(canvasFrames.length > 0 && currMp4Info.videoTracks.length === 1){
       // TODO: fyi we're only asuming one video track here.
-      const codec = currMp4Info.videoTracks[0].codec;
-      //console.log(codec);
+      const codec = currMp4Info.videoTracks[0].codec; // NOTE: for some reason, the codec in the exported mp4 doesn't match the one used here :/
       
       const frameWidth = canvasFrames[0].width;
       const frameHeight = canvasFrames[0].height;
       const totalFrames = canvasFrames.length;
-      const fps = 120; // TODO: how do I get the right fps?
+      const fps = 120; // TODO: how do I get the right fps?v let user set fps?
       
       // NOTE: we are assuming right now that the number of frames hasn't changed
       // and so the duration should be the same as the original mp4

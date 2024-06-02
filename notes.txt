@@ -1,0 +1,19 @@
+TODO:
+- be able to delete frames
+- be able to free draw on frames
+- support adding text to frames?
+
+helpful links:
+https://gpac.github.io/mp4box.js/#demos
+https://gpac.github.io/mp4box.js/#extraction
+https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API
+https://stackoverflow.com/questions/32699721/javascript-extract-video-frames-reliably
+https://gpac.github.io/mp4box.js/
+https://github.com/gpac/mp4box.js/issues/243
+https://github.com/gpac/mp4box.js/issues/243#issuecomment-1884708434
+https://stackoverflow.com/questions/73386981/get-a-frame-count-of-a-mp4-file
+https://www.agama.tv/demystifying-the-mp4-container-format/
+https://stackoverflow.com/questions/18436551/mp4-atom-parsing-where-to-configure-time/18552833#18552833
+https://dev.to/alfg/a-quick-dive-into-mp4-57fo
+https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
+https://github.com/gpac/mp4box.js/blob/master/src/isofile-advanced-creation.js

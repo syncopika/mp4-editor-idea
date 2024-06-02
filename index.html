@@ -227,7 +227,7 @@
           });
           */
           
-          canvas.addEventListener('click', (evt) => {
+          canvas.addEventListener('pointerdown', (evt) => {
             if(canvasContextMenu){
               canvasContextMenu.parentNode.removeChild(canvasContextMenu);
               canvasContextMenu = null;
@@ -429,7 +429,6 @@
   document.getElementById('saveChanges').addEventListener('click', () => saveChanges());
   
   function createCanvasContextMenu(canvasTargetElement){
-    console.log(canvasTargetElement.getBoundingClientRect());
     const menu = document.createElement('div');
     menu.style.position = 'absolute';
     menu.style.top = canvasTargetElement.getBoundingClientRect().top + 'px';
@@ -445,7 +444,7 @@
     //menu.appendChild(p);
     
     const select = document.createElement('select');
-    const options = ['', 'invert filter', 'edge detection filter'];
+    const options = ['', 'invert filter', 'edge detection filter', 'delete'];
     options.forEach(opt => {
       const o = document.createElement('option');
       o.textContent = opt;
@@ -464,6 +463,12 @@
       }else if(selected === 'edge detection filter'){
         edgeDetection(imgData);
         canvasCtx.putImageData(imgData, 0, 0);
+      }else if(selected === 'delete'){
+        canvasTargetElement.parentNode.removeChild(canvasTargetElement);
+        if(canvasContextMenu){
+          canvasContextMenu.parentNode.removeChild(canvasContextMenu);
+          canvasContextMenu = null;
+        }
       }
     });
     
@@ -473,6 +478,13 @@
     
     canvasContextMenu = menu;
   }
+
+  document.body.addEventListener('pointerdown', evt => {
+    if(evt.target.tagName !== 'CANVAS' && evt.target.tagName !== 'SELECT' && canvasContextMenu){
+      canvasContextMenu.parentNode.removeChild(canvasContextMenu);
+      canvasContextMenu = null;
+    }
+  });
 
   </script>
 </body>

@@ -31,13 +31,17 @@
     #video {
       display: none;
     }
+    
+    #instructions {
+      font-weight: bold;
+    }
   </style>
 </head>
 
 <body>
   <h1> mp4 editor idea </h1>
   <p> currently only extracts frames from an mp4 file and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
-  <p> click on a frame after loading an mp4 file to edit it. click on 'save changes' to export a new mp4 file with your edits. </p>
+  <p id='instructions'> instructions: click on a frame after loading an mp4 file to edit it. click on 'save changes' to export a new mp4 file with your edits. </p>
   
   <input type="file" accept="video/mp4" onchange="start(this.files[0])">
   
@@ -431,8 +435,8 @@
   function createCanvasContextMenu(canvasTargetElement){
     const menu = document.createElement('div');
     menu.style.position = 'absolute';
-    menu.style.top = canvasTargetElement.getBoundingClientRect().top + 'px';
-    menu.style.left = canvasTargetElement.getBoundingClientRect().left + 'px';
+    menu.style.top = (canvasTargetElement.getBoundingClientRect().top + window.scrollY) + 'px';
+    menu.style.left = (canvasTargetElement.getBoundingClientRect().left + window.scrollX) + 'px';
     menu.style.border = '1px solid #000';
     menu.style.backgroundColor = 'rgba(255, 255, 255, 125)';
     menu.style.width = canvasTargetElement.style.width + 'px';

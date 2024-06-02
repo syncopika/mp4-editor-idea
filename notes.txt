@@ -2,6 +2,7 @@ TODO:
 - be able to delete frames
 - be able to free draw on frames
 - support adding text to frames?
+- export audio with frames (can audio be editable to?)
 
 helpful links:
 https://gpac.github.io/mp4box.js/#demos

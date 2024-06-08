@@ -1,6 +1,8 @@
 # mp4 editor idea    
     
-exploring the WebCodecs API with mp4 files :D. right now it can only extract frames and some very basic editing (a couple image filters, ability to delete frames).   
+exploring the WebCodecs API with mp4 files :D. right now it can only extract frames and some very basic editing (a couple image filters, ability to delete frames).    
+    
+this app is likely most useful for only small mp4 files (e.g. with durations of a few seconds/less than a minute).   
     
 ![screenshot](screenshot.png)    
     

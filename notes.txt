@@ -4,6 +4,18 @@ TODO:
 - support adding text to frames?
 - export audio with frames (can audio be editable to?)
 
+'fun' issues:
+- how to handle large mp4s with a lot of frames? (like > 100)
+  only show a certain number of frames at a time? how to keep track of edits?
+  should we just re-read the file whenever we need to look at a new subset of frames?
+  have something akin to pagination?
+
+- currently I have a constraint on the canvas dimensions for the canvas elements to display frames
+  but when we save edits, the new mp4 will be based on the canvas dimensions
+  can we get it so that the saved mp4 will have the same dimensions as the source file?
+  will we need to keep track of edits and re-read back samples to reapply edits on a canvas with original dimensions?
+  can we also get it so that the resolution of frames remains the same for saved mp4s as the source?
+
 helpful links:
 https://gpac.github.io/mp4box.js/#demos
 https://gpac.github.io/mp4box.js/#extraction
@@ -18,3 +30,4 @@ https://stackoverflow.com/questions/18436551/mp4-atom-parsing-where-to-configure
 https://dev.to/alfg/a-quick-dive-into-mp4-57fo
 https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
 https://github.com/gpac/mp4box.js/blob/master/src/isofile-advanced-creation.js
+https://github.com/gpac/mp4box.js/wiki/Memory-managment-in-MP4Box.js

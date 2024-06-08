@@ -40,13 +40,20 @@
 
 <body>
   <h1> mp4 editor idea </h1>
-  <p> currently only extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
-  <p> NOTE: this has not been tested yet on medium/large mp4 files (e.g. anything longer than a few seconds). </p>
+  <p> it extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
+  <p> NOTE: This has not been tested yet on medium/large mp4 files (e.g. anything longer than a few seconds). </p>
+  <p> Additionally, when saving edits, the FPS hardcoded to 120, image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included. </p>
   <p id='instructions'> instructions: click on a frame after loading an mp4 file to edit it. click on 'save changes' to export a new mp4 file with your edits. </p>
   
   <input type="file" accept="video/mp4" onchange="start(this.files[0])">
   
   <br />
+  <br />
+  
+  <label for='resizeFrames'> resize frames: </label>
+  <input type='checkbox' id='resizeFrames' checked />
+  
+  <hr />
   
   <p> num frames collected: <span id='numFramesCollected'></span></p>
   
@@ -57,6 +64,9 @@
   <br />
   
   <button id='saveChanges'> save changes </button>
+  
+  <label for='filenameToSave'> name of file to export: </label>
+  <input id='filenameToSave' type='text' />
 
   <script>
   let images = [];
@@ -86,7 +96,7 @@
     reader.readAsArrayBuffer(blob);
   }
 
-  const onBlockRead = (evt) => {
+  const onBlockRead = async (evt) => {
     if(evt.target.error == null){
       onparsedbuffer(mp4Box, evt.target.result); // callback for handling read chunk
       offset += evt.target.result.byteLength;
@@ -97,6 +107,11 @@
     
     if(offset >= fileSize){
       console.log(`Done reading file (${fileSize} bytes) in ${new Date() - startDate} ms`);
+      
+      // flush the decoder since we're done reading the samples. this is important to get all the frames.
+      // see https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
+      await decoder.flush();
+      
       mp4Box.flush();
       return;
     }
@@ -181,6 +196,29 @@
       }
     }
   }
+  
+  function clampDimensions(width, height, maxWidth, maxHeight){
+    if(width > maxWidth || height > maxHeight){
+      const ratio = height / width;
+      while(width > maxWidth || height > maxHeight){
+        width -= 1;
+        height -= ratio;
+      }
+      
+      // frames need to have even-sized dimensions when using the H264 codec
+      // TODO: do we have to use H264? need to research some more
+      if(width % 2 != 0){
+        width--;
+      }
+      
+      height = Math.round(height);
+      if(height % 2 != 0){
+        height--;
+      }
+    }
+    
+    return {width, height};
+  }
 
   function createMp4Box(){
     const mp4Box = MP4Box.createFile(false);
@@ -197,7 +235,6 @@
       console.log(info);
       currMp4Info = info;
       
-      // do stuff with mp4 data
       const track = info.videoTracks[0];
       
       const videoDecoderConfig = {
@@ -218,28 +255,33 @@
       decoder = new VideoDecoder({
         output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
           //console.log(`adding canvas: ${frameCount}`);
+          
+          // try to prevent potentially bad things from happening
+          // if it's a big mp4 and there are lots of frames by limiting canvas creation
+          // TODO: is there a better way to warn a user about large mp4 files?
+          if(frameCount > 100){
+            console.log('frameCount is over 100! no more canvas elements for frames will be created.');
+            return;
+          }
+          
           const canvas = document.createElement('canvas');
           canvas.id = `frame_${frameCount}`;
-          canvas.width = track.video.width;
-          canvas.height = track.video.height;
           
-          // TODO: do something more interesting here
-          
-          /*
-          canvas.addEventListener('click', (evt) => {
-            const canvasCtx = canvas.getContext('2d');
-            const imgData = canvasCtx.getImageData(0, 0, canvas.width, canvas.height);
-            edgeDetection(imgData);
-            canvasCtx.putImageData(imgData, 0, 0);
-          });
-          */
+          const shouldResizeFrames = document.getElementById('resizeFrames').checked;
+          if(shouldResizeFrames){
+            const {width, height} = clampDimensions(track.video.width, track.video.height, 400, 400);
+            canvas.width = width;
+            canvas.height = height;
+          }else{
+            canvas.width = track.video.width;
+            canvas.height = track.video.height;
+          }
           
           canvas.addEventListener('pointerdown', (evt) => {
             if(canvasContextMenu){
               canvasContextMenu.parentNode.removeChild(canvasContextMenu);
               canvasContextMenu = null;
-            }
-            
+            }     
             createCanvasContextMenu(canvas);
           });
           
@@ -265,14 +307,15 @@
       this.start();
     }
 
-    mp4Box.onSamples = async (track_id, ref, samples) => {
+    mp4Box.onSamples = (track_id, ref, samples) => {
       console.log(`got samples - num samples: ${samples.length}`);
       
       document.getElementById('numFramesCollected').textContent = samples.length;
       
       let sampleCount = 0;
       for(const sample of samples){
-        // this is async
+        //console.log(sample);
+        
         frameInfo[sampleCount] = {
           timestamp: 1e6 * sample.cts / sample.timescale,
           duration: sample.duration,
@@ -292,10 +335,6 @@
         
         sampleCount++;
       }
-      
-      // flush the decoder since we're done reading the samples. this is important to get all the frames.
-      // see https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
-      await decoder.flush();
     }
     
     return mp4Box;
@@ -338,10 +377,15 @@
     video.load();
   }
 
-  // TODO: viewing an exported mp4 doesn't look too good on Windows but in Discord for example it 
-  // seems to render fine? why is that?
+  // TODO: viewing an exported mp4 doesn't look too good on Windows but in Discord for example it seems to render fine? why is that?
+  //
+  // TODO: is there a way we can allow for frame edits but then get the edited frame to have the original dimensions on save?
+  // do we need to read back the samples and then re-edit those? (e.g. maybe something like keep track of edits the user has made 
+  // on the canvas'd frames and then on save, reload the samples but use some offscreen canvas to apply the same edits but 
+  // keep original dimensions and then write that offscreen canvas to the mp4 file to be saved?)
+  //
   async function saveChanges(){
-    console.log(frameInfo);
+    //console.log(frameInfo);
     const canvasFrames = document.querySelectorAll('canvas');
     if(canvasFrames.length > 0 && currMp4Info.videoTracks.length === 1){
       // TODO: fyi we're only asuming one video track here.
@@ -368,7 +412,7 @@
       const file = MP4Box.createFile();
       
       // copy over some info from the loaded mp4 we're editing
-      // TODO: does this really matter?
+      // TODO: does this part really matter?
       // https://github.com/gpac/mp4box.js/blob/master/src/isofile-advanced-creation.js#L4
       file.init({
         brands: currMp4Info.brands,
@@ -430,7 +474,9 @@
       
       // TODO: add audio if present as well
       
-      file.save('editedVideo.mp4'); // TODO: allow user to name edited file
+      const filenameToSave = document.getElementById('filenameToSave');
+      const filename = filenameToSave.value ? `${filenameToSave.value}.mp4` : 'editedVideo.mp4';
+      file.save(filename);
     }
   }
 
@@ -446,10 +492,6 @@
     menu.style.width = canvasTargetElement.style.width + 'px';
     menu.style.height = canvasTargetElement.style.height + 'px';
     menu.style.display = 'block';
-    
-    //const p = document.createElement('p');
-    //p.textContent = 'asdfnjknsdklf';
-    //menu.appendChild(p);
     
     const select = document.createElement('select');
     const options = ['', 'invert filter', 'edge detection filter', 'delete'];

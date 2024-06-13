@@ -1,6 +1,5 @@
 TODO:
-- be able to delete frames
-- be able to free draw on frames
+- be able to freedraw on frames
 - support adding text to frames?
 - export audio with frames (can audio be editable to?)
 
@@ -31,3 +30,7 @@ https://dev.to/alfg/a-quick-dive-into-mp4-57fo
 https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
 https://github.com/gpac/mp4box.js/blob/master/src/isofile-advanced-creation.js
 https://github.com/gpac/mp4box.js/wiki/Memory-managment-in-MP4Box.js
+http://dranger.com/ffmpeg/tutorial05.html
+
+useful for mp4 samples to try on:
+https://gist.github.com/jsturgis/3b19447b304616f18657

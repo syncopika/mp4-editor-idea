@@ -1,8 +1,11 @@
 TODO:
-- be able to delete frames
-- be able to free draw on frames
+- be able to freedraw on frames
 - support adding text to frames?
 - export audio with frames (can audio be editable to?)
+
+issues:
+- saved mp4s have a duration of 0. :|
+- saved mp4 image quality is significantly worse :(
 
 'fun' issues:
 - how to handle large mp4s with a lot of frames? (like > 100)
@@ -31,3 +34,10 @@ https://dev.to/alfg/a-quick-dive-into-mp4-57fo
 https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
 https://github.com/gpac/mp4box.js/blob/master/src/isofile-advanced-creation.js
 https://github.com/gpac/mp4box.js/wiki/Memory-managment-in-MP4Box.js
+http://dranger.com/ffmpeg/tutorial05.html
+https://www.w3.org/2021/03/media-production-workshop/talks/chris-cunningham-hello-webcodecs.html
+https://github.com/gpac/mp4box.js/issues/374
+https://stackoverflow.com/questions/36617964/what-is-the-difference-between-timescale-and-fps
+
+useful for mp4 samples to try on:
+https://gist.github.com/jsturgis/3b19447b304616f18657

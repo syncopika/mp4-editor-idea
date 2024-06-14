@@ -28,6 +28,15 @@
       margin: 2px;
     }
     
+    #resizeFrames {
+      vertical-align: middle;
+      margin: 0;
+    }
+    
+    #seekStart, #seekEnd {
+      width: 80px;
+    }
+    
     #video {
       display: none;
     }
@@ -40,9 +49,9 @@
 
 <body>
   <h1> mp4 editor idea </h1>
-  <p> it extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
-  <p> NOTE: This has not been tested yet on mp4 files longer than a few seconds. </p>
-  <p> Additionally, when saving edits, the FPS is hardcoded to 120, image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included. </p>
+  <p> extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
+  <p> NOTE: This has not been tested yet on mp4 files longer than a minute. </p>
+  <p> Additionally, when saving edits, the FPS is hardcoded to 120, image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included in the output. </p>
   <p id='instructions'> instructions: click on a frame after loading an mp4 file to edit it. click on 'save changes' to export a new mp4 file with your edits. </p>
   
   <input type="file" accept="video/mp4" onchange="start(this.files[0])">
@@ -50,12 +59,32 @@
   <br />
   <br />
   
-  <label for='resizeFrames'> resize frames: </label>
-  <input type='checkbox' id='resizeFrames' checked />
+  <!-- options -->
+  <div>
+    <label for='resizeFrames'> resize frames: </label>
+    <input type='checkbox' id='resizeFrames' checked />
+    
+    <button id='reloadFile'> reload file </button>
+    
+    <br />
+    <br />
+    
+    <label for='seekStart'> seek start (in seconds): </label>
+    <input type='number' id='seekStart' />
+    
+    <label for='seekEnd'> seek end (in seconds): </label>
+    <input type='number' id='seekEnd' />
+    
+    <button id='seek'> seek </button>
+  </div>
   
   <hr />
   
-  <p> num frames collected: <span id='numFramesCollected'></span></p>
+  <!-- info -->
+  
+  <p> num samples/frames: <span id='numSamples'></span></p>
+  
+  <p> estimated frames-per-second: <span id='estimatedFps'></span></p>
   
   <div id='frames'></div>
   
@@ -65,10 +94,10 @@
   
   <hr />
   
-  <button id='saveChanges'> save changes </button>
-  
   <label for='filenameToSave'> name of file to export: </label>
   <input id='filenameToSave' type='text' />
+
+  <button id='saveChanges'> save changes </button>
 
   <script>
   let images = [];
@@ -77,6 +106,10 @@
   let startDate;
   let offset = 0;
   let fileSize = 0;
+  let sampleCount = 0;
+  let seekStart = 0;
+  let seekEnd = 0;
+  let isSeeking = false;
   let currMp4Info = null;
   let currFile = null;
   let canvasContextMenu = null;
@@ -89,14 +122,14 @@
     //console.log(`Appending buffer with offset: ${offset}`);
     buffer.fileStart = offset;
     mp4box.appendBuffer(buffer);
-  }
+  };
 
   const readBlock = (_offset, length, _file) => {
     const reader = new FileReader();
     const blob = _file.slice(_offset, length + _offset);
     reader.onload = onBlockRead;
     reader.readAsArrayBuffer(blob);
-  }
+  };
 
   const onBlockRead = async (evt) => {
     if(evt.target.error == null){
@@ -119,7 +152,7 @@
     }
 
     readBlock(offset, chunkSize, currFile);
-  }
+  };
 
   function clearFrameCanvases(){
     const parent = document.getElementById('frames');
@@ -184,6 +217,16 @@
       
       const track = info.videoTracks[0];
       
+      // estimate frames-per-second (fps)
+      const duration = track.duration;
+      const timescale = track.timescale;
+      const numSamples = track.nb_samples;
+      document.getElementById('numSamples').textContent = numSamples;
+      
+      const fps = Math.round(numSamples / (duration / timescale));
+      document.getElementById('estimatedFps').textContent = fps;
+      
+      
       const videoDecoderConfig = {
         codec: '',
         codedHeight: 0,
@@ -202,6 +245,17 @@
       decoder = new VideoDecoder({
         output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
           //console.log(`adding canvas: ${frameCount}`);
+          currTimeInSec = frame.timestamp / 1e6;
+          console.log(`curr time: ${currTimeInSec}, seekStart: ${seekStart}, seekEnd: ${seekEnd}, isSeeking: ${isSeeking}`);
+          
+          // if we're seeking for a range, ignore all samples not in range
+          if(isSeeking && (currTimeInSec < seekStart || currTimeInSec > seekEnd)){
+            frame.close();
+            return;
+          }else if(isSeeking && currTimeInSec >= seekEnd){
+            // done seeking
+            isSeeking = false;
+          }
           
           // try to prevent potentially bad things from happening
           // if it's a big mp4 and there are lots of frames by limiting canvas creation
@@ -253,16 +307,16 @@
       
       this.setExtractionOptions(track.id);
       this.start();
-    }
+    };
 
     mp4Box.onSamples = (track_id, ref, samples) => {
       console.log(`got samples - num samples: ${samples.length}`);
       
-      document.getElementById('numFramesCollected').textContent = samples.length;
-      
-      let sampleCount = 0;
       for(const sample of samples){
         //console.log(sample);
+        
+        //console.log(`curr time in sec: ${currTimeInSec}`);
+        //currTimeInSec += (sample.duration / sample.timescale);
         
         frameInfo[sampleCount] = {
           timestamp: 1e6 * sample.cts / sample.timescale,
@@ -271,8 +325,6 @@
           dts: sample.dts,
           sample_num: sampleCount,
         };
-        
-        console.log(sample);
         
         //console.log(`processing sample ${sampleCount++}`);
         
@@ -285,7 +337,7 @@
         
         sampleCount++;
       }
-    }
+    };
     
     return mp4Box;
   }
@@ -296,6 +348,7 @@
     startDate = new Date();
     offset = 0;
     frameCount = 0;
+    sampleCount = 0;
     
     clearFrameCanvases();
     images = [];
@@ -338,7 +391,7 @@
     //console.log(frameInfo);
     const canvasFrames = document.querySelectorAll('canvas');
     if(canvasFrames.length > 0 && currMp4Info.videoTracks.length === 1){
-      // TODO: fyi we're only asuming one video track here.
+      // NOTE: we're only asuming one video track here.
       const codec = currMp4Info.videoTracks[0].codec; // NOTE: for some reason, the codec in the exported mp4 doesn't match the one used here :/
       
       const frameWidth = canvasFrames[0].width;
@@ -348,6 +401,7 @@
       
       // NOTE: we are assuming right now that the number of frames hasn't changed
       // and so the duration should be the same as the original mp4
+      // TODO: we should not assume that
       const durationPerFrame = currMp4Info.nb_samples / currMp4Info.duration;
       
       const trackOptions = {
@@ -486,6 +540,49 @@
     if(evt.target.tagName !== 'CANVAS' && evt.target.tagName !== 'SELECT' && canvasContextMenu){
       canvasContextMenu.parentNode.removeChild(canvasContextMenu);
       canvasContextMenu = null;
+    }
+  });
+  
+  document.getElementById('reloadFile').addEventListener('click', evt => {
+    if(currFile){
+      start(currFile);
+    }
+  });
+  
+  document.getElementById('seek').addEventListener('click', evt => {
+    if(currFile){
+      seekStart = parseInt(document.getElementById('seekStart').value) || 0;
+      seekEnd = parseInt(document.getElementById('seekEnd').value) || 0;
+      //console.log(seekStart);
+      //console.log(seekEnd);
+      
+      const seekLimit = 5; // currently add a hard limit on seek range so as to not create too many canvases for frames (not sure how many canvases a page can handle but just for now at least)
+      
+      // get length of mp4 in seconds
+      const lengthOfMp4 = Math.round(currMp4Info.videoTracks[0].duration / currMp4Info.videoTracks[0].timescale);
+      //console.log(lengthOfMp4);
+      
+      if(seekStart < 0 || seekEnd < 0){
+        console.error('seekStart or seekEnd is less than 0, which is not allowed.');
+        return;
+      }else if(seekStart >= lengthOfMp4){
+        console.error('seekStart is larger than or equal to the duration of the mp4 file. seekStart should be at least 0 but less than the duration of the file.');
+        return;
+      }else if(seekEnd > lengthOfMp4){
+        console.error('seekEnd is larger than the duration of the mp4 file.');
+        return;
+      }else if(seekEnd <= seekStart){
+        console.error('seekEnd is less than or equal to seekStart. seekEnd should be larger than seekStart.');
+        return;
+      }else if(seekEnd - seekStart > seekLimit){
+        console.error(`seek range must not exceed ${seekLimit} seconds. sorry!`);
+        return;
+      }
+      
+      isSeeking = true;
+      //console.log(`seekStart:${seekStart}, seekEnd:${seekEnd}`);
+      
+      start(currFile);
     }
   });
 

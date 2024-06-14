@@ -3,6 +3,10 @@ TODO:
 - support adding text to frames?
 - export audio with frames (can audio be editable to?)
 
+issues:
+- saved mp4s have a duration of 0. :|
+- saved mp4 image quality is significantly worse :(
+
 'fun' issues:
 - how to handle large mp4s with a lot of frames? (like > 100)
   only show a certain number of frames at a time? how to keep track of edits?

@@ -226,7 +226,6 @@
       const fps = Math.round(numSamples / (duration / timescale));
       document.getElementById('estimatedFps').textContent = fps;
       
-      
       const videoDecoderConfig = {
         codec: '',
         codedHeight: 0,
@@ -553,8 +552,6 @@
     if(currFile){
       seekStart = parseInt(document.getElementById('seekStart').value) || 0;
       seekEnd = parseInt(document.getElementById('seekEnd').value) || 0;
-      //console.log(seekStart);
-      //console.log(seekEnd);
       
       const seekLimit = 5; // currently add a hard limit on seek range so as to not create too many canvases for frames (not sure how many canvases a page can handle but just for now at least)
       

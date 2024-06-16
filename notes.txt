@@ -4,7 +4,7 @@ TODO:
 - export audio with frames (can audio be editable to?)
 
 issues:
-- saved mp4s have a duration of 0. :|
+- saved mp4s have a track duration of 0. :| (this might be because exported mp4s are fragmented though? - https://github.com/gpac/mp4box.js/issues/136)
 - saved mp4 image quality is significantly worse :(
 
 'fun' issues:

@@ -7,6 +7,7 @@
   <title> mp4 editor idea</title>
   <script src="mp4box.all.js"></script> <!-- from https://gpac.github.io/mp4box.js/dist/mp4box.all.js -->
   <script src="./utils.js"></script>
+  <script src="./modal.js"></script>
   <style>
     body {
       font-family: Arial;
@@ -18,6 +19,11 @@
     
     canvas:hover {
       opacity: 0.5;
+    }
+    
+    #options {
+      display: flex;
+      gap: 10px;
     }
     
     #frames {
@@ -34,7 +40,7 @@
     }
     
     #seekStart, #seekEnd {
-      width: 80px;
+      width: 60px;
     }
     
     #video {
@@ -44,14 +50,33 @@
     #instructions {
       font-weight: bold;
     }
+    
+    #status {
+      color: #228b22;
+    }
+    
+    #notes {
+      color: #00a;
+      font-weight: bold;
+    }
+    
+    #notes:hover {
+      cursor: pointer;
+    }
   </style>
 </head>
 
 <body>
   <h1> mp4 editor idea </h1>
-  <p> extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) </p>
-  <p> NOTE: This has not been tested yet on mp4 files longer than a minute. </p>
-  <p> Additionally, when saving edits, the FPS is hardcoded to 120, image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included in the output. </p>
+  <p> extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) - <span id='notes'>see notes for current limitations </span></p>
+  
+  <!--
+  <p> Notes: </p>
+  <p> This has not been tested yet on mp4 files longer than 10 minutes. </p>
+  <p> Only up to 100 frames will be displayed at a time. Seeking is limited to a range of 5 seconds currently. </p>
+  <p> Additionally, when saving edits, the image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included in the output. </p>
+  -->
+  
   <p id='instructions'> instructions: click on a frame after loading an mp4 file to edit it. click on 'save changes' to export a new mp4 file with your edits. </p>
   
   <input type="file" accept="video/mp4" onchange="start(this.files[0])">
@@ -60,20 +85,23 @@
   <br />
   
   <!-- options -->
-  <div>
-    <label for='resizeFrames'> resize frames: </label>
-    <input type='checkbox' id='resizeFrames' checked />
-    
+  <div id='options'>
     <button id='reloadFile'> reload file </button>
+      
+    <div>
+      <label for='resizeFrames'> resize frames: </label>
+      <input type='checkbox' id='resizeFrames' checked />
+    </div>
     
-    <br />
-    <br />
-    
-    <label for='seekStart'> seek start (in seconds): </label>
-    <input type='number' id='seekStart' />
-    
-    <label for='seekEnd'> seek end (in seconds): </label>
-    <input type='number' id='seekEnd' />
+    <div>
+      <label for='seekStart'> seek start (in seconds): </label>
+      <input type='number' id='seekStart' />
+    </div>
+      
+    <div>
+      <label for='seekEnd'> seek end (in seconds): </label>
+      <input type='number' id='seekEnd' />
+    </div>
     
     <button id='seek'> seek </button>
   </div>
@@ -85,6 +113,8 @@
   <p> num samples/frames: <span id='numSamples'></span></p>
   
   <p> estimated frames-per-second: <span id='estimatedFps'></span></p>
+  
+  <p id='status'></p>
   
   <div id='frames'></div>
   
@@ -107,6 +137,7 @@
   let offset = 0;
   let fileSize = 0;
   let sampleCount = 0;
+  let samplesProcessed = 0;
   let seekStart = 0;
   let seekEnd = 0;
   let isSeeking = false;
@@ -117,6 +148,8 @@
 
   let mp4Box = null;
   let decoder = null;
+  
+  const modal = new Modal();
 
   const onparsedbuffer = (mp4box, buffer) => {
     //console.log(`Appending buffer with offset: ${offset}`);
@@ -240,28 +273,52 @@
       videoDecoderConfig.info = info;
       videoDecoderConfig.description = getDescription(track, this);
       
+      if(isSeeking){
+        document.getElementById('status').textContent = 'seeking in progress...';
+      }
+      
       // https://github.com/josephrocca/getVideoFrames.js/blob/main/mod.js
       decoder = new VideoDecoder({
         output: (frame) => {  // `frame` is a VideoFrame object: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame
           //console.log(`adding canvas: ${frameCount}`);
-          currTimeInSec = frame.timestamp / 1e6;
-          console.log(`curr time: ${currTimeInSec}, seekStart: ${seekStart}, seekEnd: ${seekEnd}, isSeeking: ${isSeeking}`);
+          samplesProcessed++;
+          
+          const currTimeInSec = frame.timestamp / 1e6;
+          
+          /*
+          if(isSeeking){
+            console.log(`curr time: ${currTimeInSec}, seekStart: ${seekStart}, seekEnd: ${seekEnd}, isSeeking: ${isSeeking}, total duration: ${track.duration / track.timescale}, sample num: ${samplesProcessed}`);
+          }*/
           
           // if we're seeking for a range, ignore all samples not in range
-          if(isSeeking && (currTimeInSec < seekStart || currTimeInSec > seekEnd)){
+          if(isSeeking && currTimeInSec < seekStart){
             frame.close();
             return;
-          }else if(isSeeking && currTimeInSec >= seekEnd){
+          }else if(isSeeking && samplesProcessed < track.nb_samples && currTimeInSec > seekEnd){
             // done seeking
+            document.getElementById('status').textContent = '';
+            frame.close();
+            return;
+          }else if(isSeeking && samplesProcessed === track.nb_samples){
+            // reset isSeeking after we've processed all samples
+            document.getElementById('status').textContent = '';
             isSeeking = false;
+            console.log('all samples processed after seek');
+            
+            if(currTimeInSec > seekEnd){
+              frame.close();
+              return;
+            }
           }
           
           // try to prevent potentially bad things from happening
           // if it's a big mp4 and there are lots of frames by limiting canvas creation
           // TODO: is there a better way to warn a user about large mp4 files?
           if(frameCount > 100){
-            console.log('frameCount is over 100! no more canvas elements for frames will be created.');
+            //console.log('frameCount is over 100! no more canvas elements for frames will be created.');
             frame.close();
+            document.getElementById('status').textContent = '';
+            isSeeking = false;
             return;
           }
           
@@ -327,11 +384,13 @@
         
         //console.log(`processing sample ${sampleCount++}`);
         
+        // I believe this decode part is asynchronous so to decide if we should display a particular frame or not (if seeking, for example)
+        // needs to be done at the decode.output callback level
         decoder.decode(new EncodedVideoChunk({
           type: sample.is_sync ? "key" : "delta",
           timestamp: 1e6 * sample.cts / sample.timescale,
           duration: 1e6 * sample.duration / sample.timescale,
-          data: sample.data
+          data: sample.data,
         }));
         
         sampleCount++;
@@ -348,6 +407,7 @@
     offset = 0;
     frameCount = 0;
     sampleCount = 0;
+    samplesProcessed = 0;
     
     clearFrameCanvases();
     images = [];
@@ -359,6 +419,10 @@
   }
 
   function start(fileobj){
+    // TODO: if a user loads a large mp4 and its samples are still being decoded
+    // while the user triggers a seek, that could add unwanted frames to the timeline
+    // need to fix (can we cancel the video decoder whenever start() is called or can
+    // we know when things are still being processed and prevent any action until finished?)
     currFile = fileobj;
     parseFile(fileobj);
     
@@ -391,25 +455,29 @@
     const canvasFrames = document.querySelectorAll('canvas');
     if(canvasFrames.length > 0 && currMp4Info.videoTracks.length === 1){
       // NOTE: we're only asuming one video track here.
-      const codec = currMp4Info.videoTracks[0].codec; // NOTE: for some reason, the codec in the exported mp4 doesn't match the one used here :/
-      
+      const track = currMp4Info.videoTracks[0];
+      const codec = track.codec; // NOTE: for some reason, the codec in the exported mp4 doesn't match the one used here :/
       const frameWidth = canvasFrames[0].width;
       const frameHeight = canvasFrames[0].height;
       const totalFrames = canvasFrames.length;
-      const fps = 120; // TODO: how do I get the right fps?v let user set fps?
+      const fps = Math.round(track.nb_samples / (track.duration / track.timescale)); // estimated FPS
       
       // NOTE: we are assuming right now that the number of frames hasn't changed
       // and so the duration should be the same as the original mp4
       // TODO: we should not assume that
-      const durationPerFrame = currMp4Info.nb_samples / currMp4Info.duration;
+      const durationPerFrame = track.nb_samples / track.duration;
+      console.log(`saving - durationPerFrame: ${durationPerFrame}`);
+      console.log(`saving - num samples: ${track.nb_samples}, track duration: ${track.duration}`);
+      console.log(`saving - codec: ${codec}`);
+      console.log(`saving - fps: ${fps}`);
       
       const trackOptions = {
-        timescale: currMp4Info.videoTracks[0].timescale,
+        timescale: track.timescale,
         width: frameWidth,
         height: frameHeight,
         nb_samples: totalFrames,
         codec: codec,
-        duration: currMp4Info.videoTracks[0].duration - (currMp4Info.nb_samples * durationPerFrame),
+        duration: Math.round(totalFrames * durationPerFrame),
       };
       
       const file = MP4Box.createFile();
@@ -458,7 +526,7 @@
         codec: codec,
         width: frameWidth,
         height: frameHeight,
-        bitrate: currMp4Info.videoTracks[0].bitrate,
+        bitrate: track.bitrate,
         framerate: fps,
       });
       
@@ -474,6 +542,7 @@
       };
       
       await videoEncoder.flush();
+      videoEncoder.close();
       
       // TODO: add audio if present as well
       
@@ -581,6 +650,16 @@
       
       start(currFile);
     }
+  });
+  
+  document.getElementById('notes').addEventListener('click', async (evt) => {
+    const notes = [
+      "Notes:",
+      "This has not been tested yet on mp4 files longer than 10 minutes.",
+      "Only up to 100 frames will be displayed at a time. Seeking is limited to a range of 5 seconds currently.",
+      "Additionally, when saving edits, the image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included in the output.",
+    ];
+    await modal.createMessageModal(notes);
   });
 
   </script>

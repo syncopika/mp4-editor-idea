@@ -144,6 +144,7 @@
   let currMp4Info = null;
   let currFile = null;
   let canvasContextMenu = null;
+  const frameLimit = 100; // how many frames allowed to be displayed at a time
   const chunkSize  = 1024 * 1024; // bytes
 
   let mp4Box = null;
@@ -275,6 +276,8 @@
       
       if(isSeeking){
         document.getElementById('status').textContent = 'seeking in progress...';
+      }else{
+        document.getElementById('status').textContent = 'processing samples...';
       }
       
       // https://github.com/josephrocca/getVideoFrames.js/blob/main/mod.js
@@ -309,15 +312,18 @@
               frame.close();
               return;
             }
+          }else if(!isSeeking && samplesProcessed === track.nb_samples){
+            document.getElementById('status').textContent = '';
+            console.log('all samples processed.');
           }
           
           // try to prevent potentially bad things from happening
           // if it's a big mp4 and there are lots of frames by limiting canvas creation
           // TODO: is there a better way to warn a user about large mp4 files?
-          if(frameCount > 100){
+          if(frameCount > frameLimit){
             //console.log('frameCount is over 100! no more canvas elements for frames will be created.');
             frame.close();
-            document.getElementById('status').textContent = '';
+            //document.getElementById('status').textContent = '';
             isSeeking = false;
             return;
           }

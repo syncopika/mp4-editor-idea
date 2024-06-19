@@ -4,8 +4,8 @@ TODO:
 - export audio with frames (can audio be editable to?)
 
 issues:
-- saved mp4s have a track duration of 0. :| (this might be because exported mp4s are fragmented though? - https://github.com/gpac/mp4box.js/issues/136)
-- saved mp4 image quality is significantly worse :(
+- saved mp4s have a track duration of 0. is this bad? (this might be because exported mp4s are fragmented though? - https://github.com/gpac/mp4box.js/issues/136)
+- saved mp4 image quality is worse (but that might be because of me using the canvases at a reduced resolution)
 
 'fun' issues:
 - how to handle large mp4s with a lot of frames? (like > 100)
@@ -38,6 +38,8 @@ http://dranger.com/ffmpeg/tutorial05.html
 https://www.w3.org/2021/03/media-production-workshop/talks/chris-cunningham-hello-webcodecs.html
 https://github.com/gpac/mp4box.js/issues/374
 https://stackoverflow.com/questions/36617964/what-is-the-difference-between-timescale-and-fps
+https://stackoverflow.com/questions/78444129/canvas-frame-capture-to-mp4-video-quality (might be helpful?)
+https://www.cimarronsystems.com/wp-content/uploads/2017/04/Elements-of-the-H.264-VideoAAC-Audio-MP4-Movie-v2_0.pdf
 
 useful for mp4 samples to try on:
 https://gist.github.com/jsturgis/3b19447b304616f18657

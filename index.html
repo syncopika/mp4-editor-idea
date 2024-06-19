@@ -257,7 +257,15 @@
       const numSamples = track.nb_samples;
       document.getElementById('numSamples').textContent = numSamples;
       
-      const fps = Math.round(numSamples / (duration / timescale));
+      let fps = Math.round(numSamples / (duration / timescale));
+      
+      if(fps === Infinity){
+        // duration may be 0
+        //console.log(`duration: ${duration}, timescale: ${timescale}`);
+        console.log('fps is Infinity. will try to use info.duration and info.timescale instead.');
+        fps = Math.round(numSamples / (info.duration / info.timescale));
+      }
+      
       document.getElementById('estimatedFps').textContent = fps;
       
       const videoDecoderConfig = {
@@ -323,7 +331,6 @@
           if(frameCount > frameLimit){
             //console.log('frameCount is over 100! no more canvas elements for frames will be created.');
             frame.close();
-            //document.getElementById('status').textContent = '';
             isSeeking = false;
             return;
           }
@@ -375,8 +382,6 @@
       console.log(`got samples - num samples: ${samples.length}`);
       
       for(const sample of samples){
-        //console.log(sample);
-        
         //console.log(`curr time in sec: ${currTimeInSec}`);
         //currTimeInSec += (sample.duration / sample.timescale);
         
@@ -466,7 +471,12 @@
       const frameWidth = canvasFrames[0].width;
       const frameHeight = canvasFrames[0].height;
       const totalFrames = canvasFrames.length;
-      const fps = Math.round(track.nb_samples / (track.duration / track.timescale)); // estimated FPS
+      
+      let fps = Math.round(track.nb_samples / (track.duration / track.timescale)); // estimated FPS
+      if(fps === Infinity){
+        // because track.duration might be 0, try using currMp4Info.duration if so
+        fps = Math.round(track.nb_samples / (currMp4Info.duration / currMp4Info.timescale));
+      }
       
       // NOTE: we are assuming right now that the number of frames hasn't changed
       // and so the duration should be the same as the original mp4
@@ -542,7 +552,9 @@
         const videoFrame = new VideoFrame(bitmap, {
           timestamp: frameInfo[index].timestamp,
         });
+        
         videoEncoder.encode(videoFrame);
+        
         videoFrame.close();
         bitmap.close();
       };

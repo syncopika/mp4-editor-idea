@@ -55,3 +55,95 @@ const imageFilterUtils = {
     }
   },
 };
+
+class CanvasUtils {
+  constructor(){
+    this.lastX = -1;
+    this.lastY = -1;
+    this.brushColor = '#000',
+    this.brushWidth = 3;
+    this.isMovingBrush = false;
+  }
+  
+  prepCanvas(canvas){
+    console.log('prepping canvas...');
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    
+    // add grey background behind selected canvas element
+    // clicking on this background will turn off drawing for the selected canvas
+    const bg = document.createElement('div');
+    bg.style.position = 'absolute';
+    bg.style.backgroundColor = '#ddd';
+    bg.style.top = 0;
+    bg.style.left = 0;
+    bg.style.width = '100%';
+    bg.style.height = '100%';
+    bg.style.opacity = 0.8;
+    
+    bg.addEventListener('click', () => {
+      const check = confirm("are you sure you're done drawing?");
+      if(check){
+        // remove drawing-related events from canvas
+        canvas.removeEventListener('pointerdown', this.onBrushDown);
+        canvas.removeEventListener('pointermove', this.onBrushMove);
+        canvas.removeEventListener('pointerup', this.onBrushUp);
+        
+        // remove bg
+        bg.parentNode.removeChild(bg);
+        canvas.style.zIndex = 0;
+        canvas.classList.add('canvas');
+      }
+    });
+    
+    canvas.classList.remove('canvas');
+    canvas.style.zIndex = 100;
+    document.body.appendChild(bg);
+    
+    // add drawing-related events to canvas
+    canvas.addEventListener('pointerdown', this.onBrushDown.bind(this));
+    canvas.addEventListener('pointermove', this.onBrushMove.bind(this));
+    canvas.addEventListener('pointerup', this.onBrushUp.bind(this));
+  }
+  
+  onBrushDown(evt){
+    const target = evt.target.getBoundingClientRect();
+    const x = evt.offsetX;
+    const y = evt.offsetY;
+    
+    //console.log(`brush down @ (${x}, ${y})`);
+    
+    this.lastX = x;
+    this.lastY = y;
+    this.isMovingBrush = true;
+  }
+  
+  onBrushMove(evt){
+    if(this.isMovingBrush){
+      const target = evt.target.getBoundingClientRect();
+      const x = evt.offsetX;
+      const y = evt.offsetY;
+      
+      this.ctx.strokeStyle = this.brushColor;
+      this.ctx.lineWidth = this.brushWidth;
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(this.lastX, this.lastY);
+      this.ctx.lineTo(x, y);
+      this.ctx.closePath();
+      this.ctx.stroke();
+      
+      //console.log(`moving brush from (${this.lastX}, ${this.lastY}) to (${x}, ${y})`);
+      
+      this.lastX = x;
+      this.lastY = y;
+    }
+  }
+  
+  onBrushUp(evt){
+    //console.log('brush up');
+    this.lastX = -1;
+    this.lastY = -1;
+    this.isMovingBrush = false;
+  }
+};

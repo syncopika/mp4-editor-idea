@@ -1,5 +1,4 @@
 TODO:
-- be able to freedraw on frames
 - support adding text to frames?
 - export audio with frames (can audio be editable to?)
 

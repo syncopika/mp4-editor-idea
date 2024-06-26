@@ -4,7 +4,7 @@
 
 <head>
   <meta charset="utf-8">
-  <title> mp4 editor idea</title>
+  <title> mp4 editor idea </title>
   <script src="mp4box.all.js"></script> <!-- from https://gpac.github.io/mp4box.js/dist/mp4box.all.js -->
   <script src="./utils.js"></script>
   <script src="./modal.js"></script>
@@ -17,8 +17,16 @@
       border: 1px solid #000;
     }
     
+    h1 {
+      text-align: center;
+    }
+    
     .canvas:hover {
       opacity: 0.5;
+    }
+    
+    #selectFile {
+      margin-bottom: 1.3em;
     }
     
     #options {
@@ -68,7 +76,7 @@
 
 <body>
   <h1> mp4 editor idea </h1>
-  <p> extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters). more to come hopefully :) - <span id='notes'>see notes on current limitations </span></p>
+  <p> extracts frames from an mp4 file using mp4box.js and allows some editing of the frames (e.g. image filters, drawing). more to come hopefully :) - <span id='notes'>see notes on current limitations </span></p>
   
   <!--
   <p> Notes: </p>
@@ -79,17 +87,14 @@
   
   <p id='instructions'> instructions: click on a frame after loading an mp4 file to edit it. click on 'save changes' to export a new mp4 file with your edits. When drawing mode is active, click on the gray background to end drawing. </p>
   
-  <input type="file" accept="video/mp4" onchange="start(this.files[0])">
+  <input id='selectFile' type='file' accept='video/mp4' onchange='start(this.files[0])'>
   
-  <br />
-  <br />
+  <button id='reloadFile'> reload file </button>
   
   <!-- options -->
   <div id='options'>
-    <button id='reloadFile'> reload file </button>
-      
     <div>
-      <label for='resizeFrames'> resize frames: </label>
+      <label for='resizeFrames'> resize frames on load: </label>
       <input type='checkbox' id='resizeFrames' checked />
     </div>
     
@@ -119,8 +124,6 @@
   <div id='frames'></div>
   
   <video controls id='video' width='350' height='350'></video>
-  
-  <br />
   
   <hr />
   

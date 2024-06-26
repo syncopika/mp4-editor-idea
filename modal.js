@@ -7,7 +7,7 @@ class Modal {
       transform: "translate(-50%, -50%)",
       zIndex: "1010",
       textAlign: "center",
-      padding: "8px",
+      padding: "6px",
       backgroundColor: "#fff",
       width: "auto",
       height: "auto",

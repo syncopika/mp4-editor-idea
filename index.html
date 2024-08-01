@@ -71,6 +71,14 @@
     #notes:hover {
       cursor: pointer;
     }
+    
+    #modal {
+      display: none;
+    }
+    
+    #resizeFramesLabel {
+      vertical-align: middle;
+    }
   </style>
 </head>
 
@@ -94,17 +102,17 @@
   <!-- options -->
   <div id='options'>
     <div>
-      <label for='resizeFrames'> resize frames on load: </label>
+      <label id='resizeFramesLabel' for='resizeFrames'> resize frames on load: </label>
       <input type='checkbox' id='resizeFrames' checked />
     </div>
     
     <div>
-      <label for='seekStart'> seek start (in seconds): </label>
+      <label for='seekStart'> seek start (sec): </label>
       <input type='number' id='seekStart' />
     </div>
       
     <div>
-      <label for='seekEnd'> seek end (in seconds): </label>
+      <label for='seekEnd'> seek end (sec): </label>
       <input type='number' id='seekEnd' />
     </div>
     
@@ -131,6 +139,13 @@
   <input id='filenameToSave' type='text' />
 
   <button id='saveChanges'> save changes </button>
+  
+  <modal-component id='modal'>
+    <p>Notes:</p>
+    <p>This has not been tested yet on mp4 files longer than 10 minutes so success with such files may vary (that said, there may be small mp4 files that may break this app as well :D ).</p>
+    <p>Only up to 100 frames will be displayed at a time. Seeking is currently limited to a range of 5 seconds.</p>
+    <p>Additionally, when saving edits, the image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included in the output.</p>
+  </modal-component>
 
   <script>
   let images = [];
@@ -687,6 +702,7 @@
   });
   
   document.getElementById('notes').addEventListener('click', async (evt) => {
+    /*
     const notes = [
       "Notes:",
       "This has not been tested yet on mp4 files longer than 10 minutes so success with such files may vary (that said, there may be small mp4 files that may break this app as well :D ).",
@@ -694,6 +710,8 @@
       "Additionally, when saving edits, the image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included in the output.",
     ];
     await modal.createMessageModal(notes);
+    */
+    document.getElementById('modal').style.display = "block";
   });
 
   </script>

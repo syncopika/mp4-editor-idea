@@ -25,6 +25,10 @@
       opacity: 0.5;
     }
     
+    .modal {
+      display: none;
+    }
+    
     #selectFile {
       margin-bottom: 1.3em;
     }
@@ -70,10 +74,6 @@
     
     #notes:hover {
       cursor: pointer;
-    }
-    
-    #modal {
-      display: none;
     }
     
     #resizeFramesLabel {
@@ -140,11 +140,35 @@
 
   <button id='saveChanges'> save changes </button>
   
-  <modal-component id='modal'>
+  <modal-component id='notesModal' class='modal'>
     <p>Notes:</p>
     <p>This has not been tested yet on mp4 files longer than 10 minutes so success with such files may vary (that said, there may be small mp4 files that may break this app as well :D ).</p>
     <p>Only up to 100 frames will be displayed at a time. Seeking is currently limited to a range of 5 seconds.</p>
     <p>Additionally, when saving edits, the image quality unfortunately is not preserved (so it may look worse than the source file) and any audio tracks are not included in the output.</p>
+  </modal-component>
+  
+  <modal-component id='seekLimitModal' class='modal'>
+    <p> Seek limit is currently set to 5 seconds, sorry! </p>
+  </modal-component>
+  
+  <modal-component id='seekValuesInvalidModal' class='modal'>
+    <p> seekStart or seekEnd is less than 0, which is invalid. </p>
+  </modal-component>
+  
+  <modal-component id='seekStartTooLargeModal' class='modal'>
+    <p> seekStart is larger than or equal to the duration of the mp4 file. seekStart should be at least 0 but less than the duration of the file. </p>
+  </modal-component>
+  
+  <modal-component id='seekEndTooSmallModal' class='modal'>
+    <p> seekEnd is less than or equal to seekStart. seekEnd should be larger than seekStart. </p>
+  </modal-component>
+  
+  <modal-component id='seekEndTooLargeModal' class='modal'>
+    <p> seekEnd is larger than the duration of the mp4 file. </p>
+  </modal-component>
+  
+  <modal-component id='stillProcessing' class='modal'>
+    <p> File is still being processed... </p>
   </modal-component>
 
   <script>
@@ -158,6 +182,7 @@
   let samplesProcessed = 0;
   let seekStart = 0;
   let seekEnd = 0;
+  let isProcessing = false;
   let isSeeking = false;
   let currMp4Info = null;
   let currFile = null;
@@ -169,8 +194,6 @@
   let decoder = null;
   
   const canvasUtils = new CanvasUtils();
-  
-  const modal = new Modal();
 
   const onparsedbuffer = (mp4box, buffer) => {
     //console.log(`Appending buffer with offset: ${offset}`);
@@ -200,8 +223,10 @@
       // flush the decoder since we're done reading the samples. this is important to get all the frames.
       // see https://stackoverflow.com/questions/74098842/videodecoder-decode-output-not-called
       await decoder.flush();
-      
       mp4Box.flush();
+      
+      isProcessing = false;
+      
       return;
     }
 
@@ -327,7 +352,6 @@
             return;
           }else if(isSeeking && samplesProcessed < track.nb_samples && currTimeInSec > seekEnd){
             // done seeking
-            document.getElementById('status').textContent = '';
             frame.close();
             return;
           }else if(isSeeking && samplesProcessed === track.nb_samples){
@@ -396,6 +420,9 @@
       decoder.configure(videoDecoderConfig);
       
       this.setExtractionOptions(track.id);
+      
+      isProcessing = true;
+      
       this.start();
     };
 
@@ -661,12 +688,26 @@
   });
   
   document.getElementById('reloadFile').addEventListener('click', evt => {
-    if(currFile){
+    if(currFile && !isProcessing){
       start(currFile);
+    }else if(isProcessing){
+      document.getElementById('stillProcessing').style.display = 'block';
     }
   });
   
   document.getElementById('seek').addEventListener('click', evt => {
+    if(isSeeking){
+      console.log('seek is currently in progress');
+      document.getElementById('stillProcessing').style.display = 'block';
+      return;
+    }
+    
+    if(isProcessing){
+      console.log('file is still processing');
+      document.getElementById('stillProcessing').style.display = 'block';
+      return;
+    }
+    
     if(currFile){
       seekStart = parseInt(document.getElementById('seekStart').value) || 0;
       seekEnd = parseInt(document.getElementById('seekEnd').value) || 0;
@@ -678,19 +719,24 @@
       //console.log(lengthOfMp4);
       
       if(seekStart < 0 || seekEnd < 0){
-        console.error('seekStart or seekEnd is less than 0, which is not allowed.');
+        console.error('seekStart or seekEnd is less than 0, which is invalid.');
+        document.getElementById('seekValuesInvalidModal').style.display = 'block';
         return;
       }else if(seekStart >= lengthOfMp4){
         console.error('seekStart is larger than or equal to the duration of the mp4 file. seekStart should be at least 0 but less than the duration of the file.');
+        document.getElementById('seekStartTooLargeModal').style.display = 'block';
         return;
       }else if(seekEnd > lengthOfMp4){
         console.error('seekEnd is larger than the duration of the mp4 file.');
+        document.getElementById('seekEndTooLargeModal').style.display = 'block';
         return;
       }else if(seekEnd <= seekStart){
         console.error('seekEnd is less than or equal to seekStart. seekEnd should be larger than seekStart.');
+        document.getElementById('seekEndTooSmallModal').style.display = 'block';
         return;
       }else if(seekEnd - seekStart > seekLimit){
         console.error(`seek range must not exceed ${seekLimit} seconds. sorry!`);
+        document.getElementById('seekLimitModal').style.display = 'block';
         return;
       }
       
@@ -711,7 +757,7 @@
     ];
     await modal.createMessageModal(notes);
     */
-    document.getElementById('modal').style.display = "block";
+    document.getElementById('notesModal').style.display = 'block';
   });
 
   </script>

@@ -69,18 +69,18 @@ class ModalComponent extends HTMLElement {
   }
   
   connectedCallback(){
-    console.log("added to page");
+    //console.log("added to page");
     
     // shadow root
     const shadow = this.attachShadow({mode: "open"});
     
     // overlay div
     const overlay = document.createElement("div");
-    overlay.setAttribute("class", "modal-overlay");
+    overlay.className = "modal-overlay";
     
     // modal
     const modal = document.createElement("div");
-    modal.setAttribute("class", "modal");
+    modal.className = "modal";
     
     // the area to display text
     const textArea = document.createElement("div");
